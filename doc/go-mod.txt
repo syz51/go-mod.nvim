@@ -1,0 +1,133 @@
+*go-mod.txt*  Go Module Dependency Checker for Neovim
+
+==============================================================================
+CONTENTS                                                *go-mod-contents*
+
+    1. Introduction ........................... |go-mod-introduction|
+    2. Requirements ........................... |go-mod-requirements|
+    3. Setup ................................. |go-mod-setup|
+    4. Configuration ......................... |go-mod-configuration|
+    5. Commands .............................. |go-mod-commands|
+    6. Logging ............................... |go-mod-logging|
+    7. License ............................... |go-mod-license|
+
+==============================================================================
+1. INTRODUCTION                                      *go-mod-introduction*
+
+go-mod is a Neovim plugin that checks Go module dependencies in go.mod
+files for updates, similar to package-info.nvim for JavaScript/TypeScript.
+
+Features:
+- Shows which dependencies are out of date
+- Provides latest versions of dependencies
+- Includes logging functionality with output to a file
+- Integrates with LazyVim
+
+==============================================================================
+2. REQUIREMENTS                                      *go-mod-requirements*
+
+- Neovim >= 0.7.0
+- plenary.nvim
+- Go installed and in your PATH
+
+==============================================================================
+3. SETUP                                                    *go-mod-setup*
+
+With lazy.nvim:
+>lua
+    {
+      "username/go-mod.nvim",
+      dependencies = { "nvim-lua/plenary.nvim" },
+      ft = "gomod",
+      opts = {
+        -- your configuration here
+        icons = {
+          outdated = "󰚰 ",
+          up_to_date = "󰄬 ",
+          unpublished = "󰚯 ",
+          error = "󰅚 ",
+        },
+        auto_check = true,
+        check_interval = 30,
+        log_level = "info",
+      }
+    }
+<
+
+With traditional plugin managers:
+>lua
+    require("go-mod").setup({
+      -- your configuration here
+    })
+<
+
+==============================================================================
+4. CONFIGURATION                                    *go-mod-configuration*
+
+Default configuration:
+>lua
+    require("go-mod").setup({
+      -- Icons for the signs
+      icons = {
+        outdated = "󰚰 ",
+        up_to_date = "󰄬 ",
+        unpublished = "󰚯 ",
+        error = "󰅚 ",
+      },
+      -- Virtual text options
+      virtual_text = {
+        prefix = "●",
+        spacing = 4,
+      },
+      -- Highlight groups
+      highlights = {
+        outdated = "DiagnosticWarn",
+        up_to_date = "DiagnosticOk",
+        unpublished = "DiagnosticInfo",
+        error = "DiagnosticError",
+      },
+      -- Auto check on file open
+      auto_check = true,
+      -- Check interval in minutes (0 to disable)
+      check_interval = 60,
+      -- Log level: "trace", "debug", "info", "warn", "error"
+      log_level = "info",
+      -- Log file path (empty for no file logging)
+      log_file = vim.fn.stdpath("cache") .. "/go-mod.log",
+    })
+<
+
+==============================================================================
+5. COMMANDS                                              *go-mod-commands*
+
+*:GoModCheck*
+    Check dependencies in the current go.mod file
+
+*:GoModToggle*
+    Toggle the display of dependency information
+
+*:GoModLog*
+    Open the go-mod log file in a new buffer
+
+==============================================================================
+6. LOGGING                                                *go-mod-logging*
+
+The plugin includes a logging system that can output to both Neovim
+notifications and a log file. You can configure the log level and file path
+in the setup options.
+
+To view the log file, you can use:
+>lua
+    require("go-mod.log").open()
+<
+
+Or use the command:
+>
+    :GoModLog
+<
+
+==============================================================================
+7. LICENSE                                                *go-mod-license*
+
+MIT License
+

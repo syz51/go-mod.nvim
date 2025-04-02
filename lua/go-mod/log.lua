@@ -1,6 +1,7 @@
+-- Logging module for go-mod.nvim
 local M = {}
 
--- Default config
+-- Default configuration
 local config = {
 	log_level = "info",
 	log_file = "",
@@ -26,7 +27,6 @@ function M.setup(opts)
 	if config.log_file ~= "" then
 		local Path = require("plenary.path")
 		local log_dir = Path:new(config.log_file):parent()
-
 		if not log_dir:exists() then
 			log_dir:mkdir({ parents = true })
 		end
@@ -77,15 +77,19 @@ end
 function M.trace(msg)
 	log("trace", msg)
 end
+
 function M.debug(msg)
 	log("debug", msg)
 end
+
 function M.info(msg)
 	log("info", msg)
 end
+
 function M.warn(msg)
 	log("warn", msg)
 end
+
 function M.error(msg)
 	log("error", msg)
 end
@@ -98,15 +102,12 @@ function M.open()
 		if file then
 			file:close()
 			vim.cmd("edit " .. config.log_file)
-
 			-- Set up buffer for log viewing
 			local bufnr = vim.api.nvim_get_current_buf()
-
 			-- Set buffer options
 			vim.bo[bufnr].modifiable = false
 			vim.bo[bufnr].buftype = "nofile"
 			vim.bo[bufnr].filetype = "log"
-
 			-- Add autocmd to reload log when buffer is shown
 			local group = vim.api.nvim_create_augroup("GoModLogView", { clear = true })
 			vim.api.nvim_create_autocmd({ "BufEnter" }, {
@@ -131,4 +132,5 @@ function M.open()
 	end
 end
 
+-- Return the module
 return M

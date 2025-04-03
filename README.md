@@ -1,35 +1,25 @@
 # go-mod.nvim
 
-A Neovim plugin that checks Go module dependencies in go.mod files for updates,
-similar to package-info.nvim for JavaScript/TypeScript.
-
-![Go Mod Demo](https://github.com/username/go-mod.nvim/assets/demo.gif)
+A Neovim plugin for checking and updating Go module dependencies directly in your editor.
 
 ## Features
 
-- ✅ Shows which dependencies are out of date with visual indicators
-- 🔄 Provides latest available versions for each dependency
-- 🔍 Semantic version comparison to accurately identify outdated packages
-- 🔄 Automatic checking when opening go.mod files
-- ⏱️ Configurable periodic checking
-- 📝 Comprehensive logging system
-- 🎨 Fully customizable appearance
+- Shows dependency status with virtual text in go.mod files
+- Highlights outdated, up-to-date, and unpublished dependencies
+- Allows updating dependencies to their latest versions
+- Provides a UI for selecting which dependencies to update
+- Automatic checking on file open and periodic rechecking
 
 ## Screenshots
 
-### Outdated Dependencies
-
-![Outdated Dependencies](https://github.com/username/go-mod.nvim/assets/outdated.png)
-
-### Up-to-date Dependencies
-
-![Up-to-date Dependencies](https://github.com/username/go-mod.nvim/assets/uptodate.png)
+Screenshots to be added
 
 ## Requirements
 
-- Neovim >= 0.7.0
+- Neovim 0.7+
 - [plenary.nvim](https://github.com/nvim-lua/plenary.nvim)
-- Go installed and in your PATH
+- Go 1.16+ installed and in your PATH
+- Nerd font for symbols
 
 ## Installation
 
@@ -37,45 +27,90 @@ similar to package-info.nvim for JavaScript/TypeScript.
 
 ```lua
 {
-  "username/go-mod.nvim",
-  dependencies = { "nvim-lua/plenary.nvim" },
-  ft = "gomod",
-  opts = {
-    -- your configuration here (see Configuration section)
-  },
+  'syz51/go-mod.nvim',
+  dependencies = { 'nvim-lua/plenary.nvim' },
+  config = true,
+  ft = 'gomod', -- Optional: only load for go.mod files
 }
 ```
 
-### Using vim-plug
+## Configuration
 
-## How It Works
+The plugin comes with sensible defaults, but you can customize it by passing options to the `setup` function:
 
-1. The plugin parses your go.mod file to extract all dependencies and their
-   current versions.
-2. It uses `go list -m -json module@latest` to check for the latest available
-   version of each dependency.
-3. It compares the current version with the latest version using semantic
-   versioning rules.
-4. It displays the status of each dependency using virtual text at the end of
-   each line.
+```lua
+require('go-mod').setup({
+  -- Icons for the signs
+  icons = {
+    outdated = "󰚰 ",
+    up_to_date = "󰄬 ",
+    unpublished = "󰚯 ",
+    error = "󰅚 ",
+  },
 
-## Troubleshooting
+  -- Highlight groups
+  highlights = {
+    outdated = "DiagnosticWarn",
+    up_to_date = "DiagnosticOk",
+    unpublished = "DiagnosticInfo",
+    error = "DiagnosticError",
+  },
 
-### Common Issues
+  -- Auto check on file open
+  auto_check = true,
 
-#### Plugin Not Working
+  -- Check interval in minutes (0 to disable)
+  check_interval = 60,
 
-- Make sure Go is installed and in your PATH
-- Check the log file with `:GoModLog` for any errors
-- Try running with `log_level = "debug"` for more detailed logs
+  -- Log level: "trace", "debug", "info", "warn", "error"
+  log_level = "info",
 
-#### Dependencies Not Showing as Outdated
+  -- Log file path (empty for no file logging)
+  log_file = vim.fn.stdpath("cache") .. "/go-mod.log",
+})
+```
 
-- Make sure you have internet connectivity
-- Check if the Go modules proxy is accessible
-- Try manually running `go list -m -json module@latest` to see if it works
+## Usage
 
-#### Visual Indicators Not Showing
+### Commands
 
-- Make sure your terminal supports the icons or customize them
-- Check if the highlight groups are defined in your colorscheme
+- `:GoModCheck` - Check dependencies in the current buffer
+- `:GoModToggle` - Toggle visibility of the dependency information
+- `:GoModLog` - Open the log file
+- `:GoModUpdate` - Open a UI to select and update modules
+- `:GoModUpdate module-name` - Update a specific module
+
+### Key Mappings
+
+The plugin doesn't set any key mappings by default. Here are some suggestions:
+
+```lua
+-- Add to your init.lua or config
+vim.api.nvim_create_autocmd("FileType", {
+  pattern = {"gomod", "go.mod"},
+  callback = function()
+    local opts = { noremap = true, silent = true, buffer = true }
+    vim.keymap.set('n', '<leader>mc', '<cmd>GoModCheck<CR>', opts)
+    vim.keymap.set('n', '<leader>mt', '<cmd>GoModToggle<CR>', opts)
+    vim.keymap.set('n', '<leader>mu', '<cmd>GoModUpdate<CR>', opts)
+  end
+})
+```
+
+### Update Window Controls
+
+In the update selection window:
+
+- `Space` or `Enter` - Toggle selection of a module
+- `a` - Toggle selection of all modules
+- `u` - Update selected modules
+- `U` - Update all modules
+- `Esc`, `q`, or `c` - Cancel and close the window
+
+## License
+
+MIT
+
+## Credits
+
+- [syz51](https://github.com/syz51)

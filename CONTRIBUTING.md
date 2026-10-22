@@ -7,7 +7,8 @@ is a clear need.
 
 ## Local checks
 
-Install Neovim >=0.12, Go >=1.16, and StyLua **2.3.1**. The plugin has no
+Install Neovim >=0.12, the latest stable Go (baseline **1.27.3 or newer**), and
+StyLua **2.3.1**. The plugin has no
 external Lua dependencies; the test runner never downloads tools:
 
 ```sh
@@ -39,10 +40,10 @@ rely on private credentials, or touch the contributor's Go project. CI runs
 stable Neovim with Go available and module downloads disabled during
 the specs.
 
-CI also checks the minimum supported versions (Neovim 0.12.0 and Go 1.16.15)
-on Linux, plus current stable Neovim and Go on Linux and macOS. Prefer a
-currently supported Go release for everyday use; the older version is tested
-for compatibility only. Pull requests must pass `test`, `format`, and
+Support and CI track the latest stable Go release; legacy Go toolchains are
+not maintained. Every CI compatibility leg uses the latest stable Go: Neovim
+0.12.0 on Linux, plus stable Neovim on Linux and macOS.
+Pull requests must pass `test`, `format`, and
 `lazy-loading` before merging into `main`.
 
 ## Manual checks

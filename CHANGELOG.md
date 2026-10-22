@@ -6,8 +6,9 @@
   tags against changes or deletion.
 - Add private vulnerability reporting guidance and weekly GitHub Actions
   dependency updates.
-- Verify minimum supported Neovim and Go versions in CI alongside current
-  versions on Linux and macOS, and validate Go's minimum version in health checks.
+- Track the latest stable Go in CI on Linux and macOS, retaining Neovim 0.12.0
+  coverage. Require Go 1.27.3 or newer in health checks; legacy Go toolchains
+  are no longer maintained.
 - Keep older maintenance releases from replacing a newer stable release as
   Latest, including when releases are published concurrently.
 

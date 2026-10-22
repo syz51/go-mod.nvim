@@ -42,14 +42,14 @@ local function check(case)
 	assert(#reports == 4, "unexpected health reports")
 end
 
-for _, version in ipairs({ "1.16", "1.16.15", "1.27.3", "2.0.0" }) do
+for _, version in ipairs({ "1.27.3", "1.27.10", "1.28.0", "2.0.0" }) do
 	check({ output = "go version go" .. version .. " linux/amd64\n", level = "ok", message = "go" .. version })
 end
-for _, version in ipairs({ "1.15.15", "1.9.7", "0.16.0" }) do
+for _, version in ipairs({ "1.27.2", "1.26.9", "1.9.7", "0.27.3" }) do
 	check({
 		output = "go version go" .. version .. " linux/amd64\n",
 		level = "error",
-		message = "Go 1.16 or newer is required",
+		message = "Go 1.27.3 or newer is required",
 	})
 end
 for _, output in ipairs({ "", "unexpected output\n", "go version devel go1.28-abcdef linux/amd64\n" }) do
@@ -58,5 +58,5 @@ end
 check({ missing = true, level = "error", message = "Go is missing from PATH" })
 check({ code = 1, output = "process failed\n", level = "error", message = "'go version' failed: process failed" })
 check({ code = 1, output = "go version go1.27.3 linux/amd64", level = "error", message = "'go version' failed" })
-check({ old_neovim = true, output = "go version go1.16.15 linux/amd64", level = "ok", message = "go1.16.15" })
+check({ old_neovim = true, output = "go version go1.27.3 linux/amd64", level = "ok", message = "go1.27.3" })
 print("health_spec: passed")

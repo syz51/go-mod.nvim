@@ -7,11 +7,12 @@ which outdated modules to update.
 ## Requirements
 
 - Neovim **0.12 or newer**
-- Go **1.16 or newer**, available as `go` in Neovim's `PATH`
+- Go **1.27.3 or newer**, available as `go` in Neovim's `PATH`
 - A Nerd Font for the default icons, or your own text icons
 
-CI runs the offline standalone specs with Go 1.16.15 and Neovim v0.12.0 on
-Ubuntu, and with the latest stable Go and Neovim on Ubuntu and macOS.
+Support and CI track the latest stable Go release; legacy Go toolchains are
+not maintained. CI runs the offline standalone specs with the latest stable Go
+on Ubuntu with Neovim v0.12.0, and on Ubuntu and macOS with stable Neovim.
 
 ## Installation
 

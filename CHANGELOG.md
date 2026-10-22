@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Require passing pull-request checks on `main` and protect published release
+  tags against changes or deletion.
+- Add private vulnerability reporting guidance and weekly GitHub Actions
+  dependency updates.
+- Verify minimum supported Neovim and Go versions in CI alongside current
+  versions on Linux and macOS, and validate Go's minimum version in health checks.
+- Keep older maintenance releases from replacing a newer stable release as
+  Latest, including when releases are published concurrently.
+
 ## 0.1.2 - 2026-10-23
 
 - Notify once when a loaded `go.mod` buffer starts fetching dependency versions;

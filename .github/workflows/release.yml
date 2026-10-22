@@ -8,8 +8,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-publication
   cancel-in-progress: false
+  queue: max
 
 jobs:
   checks:
@@ -63,6 +64,7 @@ jobs:
           if [[ $RELEASE_TAG == *-* ]]; then
             set -- --prerelease --latest=false
           else
-            set -- --latest
+            latest=$(bash scripts/release-latest.sh "$RELEASE_TAG")
+            set -- "--latest=$latest"
           fi
           gh release create "$RELEASE_TAG" --verify-tag --title "$RELEASE_TAG" --notes-file "$notes" "$@"

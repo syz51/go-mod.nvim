@@ -39,6 +39,12 @@ rely on private credentials, or touch the contributor's Go project. CI runs
 stable Neovim with Go available and module downloads disabled during
 the specs.
 
+CI also checks the minimum supported versions (Neovim 0.12.0 and Go 1.16.15)
+on Linux, plus current stable Neovim and Go on Linux and macOS. Prefer a
+currently supported Go release for everyday use; the older version is tested
+for compatibility only. Pull requests must pass `test`, `format`, and
+`lazy-loading` before merging into `main`.
+
 ## Manual checks
 
 For UI or update changes, use a disposable Go project. Open its `go.mod`, run
@@ -73,8 +79,10 @@ installation checks for that exact tagged commit before publishing.
 4. Watch `Release` in GitHub Actions. It requires the tag to target a commit
    in `origin/main` history, validates a nonempty `VERSION - YYYY-MM-DD` section
    in `CHANGELOG.md`, and publishes notes extracted from that section only after
-   every check passes. Regular versions become the latest release;
-   `v0.1.2-rc.1`-style tags become prereleases.
+   every check passes. A regular version becomes Latest only if it is newer
+   than every published stable release; older maintenance releases do not
+   replace Latest. `v0.1.2-rc.1`-style tags become prereleases. Publishing is
+   serialized so concurrent releases cannot race to update Latest.
 5. Verify the published release, tag target, and source archive. Users can pin
    the tag in their plugin manager. There are no compiled assets or separate
    package-registry uploads.
@@ -82,6 +90,10 @@ installation checks for that exact tagged commit before publishing.
 If a check fails, fix it in a new commit and rerun validation before tagging.
 If an already-pushed tag has a problem, publish a new version instead of
 rewriting it.
+
+GitHub rules require pull requests and passing checks on `main`, and block
+force pushes and deletion. Release tags matching `v*` cannot be updated or
+deleted. No approval is required for the solo-maintainer workflow.
 
 For a transient infrastructure failure, rerun the failed Actions run. Repeated
 runs leave an already-published release unchanged; an existing draft requires

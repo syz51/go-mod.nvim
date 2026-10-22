@@ -10,8 +10,21 @@ permissions:
   contents: read
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
+  compatibility:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            go: '1.16.15'
+            neovim: v0.12.0
+          - os: ubuntu-latest
+            go: stable
+            neovim: stable
+          - os: macos-latest
+            go: stable
+            neovim: stable
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -19,18 +32,28 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
-          go-version: '1.23.x'
+          go-version: ${{ matrix.go }}
           cache: false
       - uses: rhysd/action-setup-vim@febef33995d6649302e9d88dda81e071b68f16a7 # v1
         with:
           neovim: true
-          version: stable
+          version: ${{ matrix.neovim }}
       - name: Run standalone specs offline
         env:
           GOPROXY: 'off'
           GOSUMDB: 'off'
           GOTOOLCHAIN: local
         run: make test
+
+  test:
+    needs: compatibility
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every compatibility leg to pass
+        env:
+          RESULT: ${{ needs.compatibility.result }}
+        run: test "$RESULT" = success
 
   format:
     runs-on: ubuntu-latest

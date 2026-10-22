@@ -12,7 +12,16 @@ function M.check()
 	if vim.fn.executable("go") == 1 then
 		local version = vim.fn.system({ "go", "version" })
 		if vim.v.shell_error == 0 then
-			ok(vim.trim(version))
+			version = vim.trim(version)
+			local major, minor = version:match("^go version go(%d+)%.(%d+)")
+			major, minor = tonumber(major), tonumber(minor)
+			if not major then
+				warn("Unable to determine Go version: " .. version, { "Verify Go 1.16 or newer is installed" })
+			elseif major > 1 or (major == 1 and minor >= 16) then
+				ok(version)
+			else
+				err("Go 1.16 or newer is required; found " .. version, { "Upgrade Go, then restart Neovim" })
+			end
 		else
 			err("go is executable but 'go version' failed: " .. version)
 		end

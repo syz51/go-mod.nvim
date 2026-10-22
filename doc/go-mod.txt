@@ -1,133 +1,204 @@
-*go-mod.txt*  Go Module Dependency Checker for Neovim
+*go-mod.txt*  Check and update Go module dependencies
 
 ==============================================================================
-CONTENTS                                                *go-mod-contents*
+go-mod.nvim                                                     *go-mod*
 
-    1. Introduction ........................... |go-mod-introduction|
-    2. Requirements ........................... |go-mod-requirements|
-    3. Setup ................................. |go-mod-setup|
-    4. Configuration ......................... |go-mod-configuration|
-    5. Commands .............................. |go-mod-commands|
-    6. Logging ............................... |go-mod-logging|
-    7. License ............................... |go-mod-license|
+Repository: https://github.com/syz51/go-mod.nvim
 
-==============================================================================
-1. INTRODUCTION                                      *go-mod-introduction*
-
-go-mod is a Neovim plugin that checks Go module dependencies in go.mod
-files for updates, similar to package-info.nvim for JavaScript/TypeScript.
-
-Features:
-- Shows which dependencies are out of date
-- Provides latest versions of dependencies
-- Includes logging functionality with output to a file
-- Integrates with LazyVim
+    1. Requirements .......................... |go-mod-requirements|
+    2. Setup ................................. |go-mod-setup|
+    3. Configuration ......................... |go-mod-configuration|
+    4. Commands and picker ................... |go-mod-commands|
+    5. Lua API ............................... |go-mod-api|
+    6. Go behavior ........................... |go-mod-behavior|
+    7. Troubleshooting ....................... |go-mod-troubleshooting|
+    8. License ............................... |go-mod-license|
 
 ==============================================================================
-2. REQUIREMENTS                                      *go-mod-requirements*
+1. Requirements                                      *go-mod-requirements*
 
-- Neovim >= 0.7.0
-- plenary.nvim
-- Go installed and in your PATH
+Neovim >=0.12 and Go >=1.16 on PATH are required. No external Lua dependencies
+are needed.
+The default icons need a Nerd Font; configure text icons if preferred.
+
+Dependency status is shown as virtual text on require entries in go.mod:
+    outdated       A newer version is available for this module path.
+    up_to_date     The current and latest versions compare equal.
+    unpublished    The current version compares newer than the returned latest
+                   version; this does not prove it was never published.
+    error          The lookup or version comparison failed.
 
 ==============================================================================
-3. SETUP                                                    *go-mod-setup*
+2. Setup                                                    *go-mod-setup*
 
-With lazy.nvim:
->lua
+With lazy.nvim: >lua
     {
-      "username/go-mod.nvim",
-      dependencies = { "nvim-lua/plenary.nvim" },
+      "syz51/go-mod.nvim",
       ft = "gomod",
-      opts = {
-        -- your configuration here
-        icons = {
-          outdated = "󰚰 ",
-          up_to_date = "󰄬 ",
-          unpublished = "󰚯 ",
-          error = "󰅚 ",
-        },
-        auto_check = true,
-        check_interval = 30,
-        log_level = "info",
-      }
+      opts = {},
     }
 <
-
-With traditional plugin managers:
->lua
-    require("go-mod").setup({
-      -- your configuration here
-    })
+With another manager, install the plugin on your runtime path.
+Initialization happens automatically on the first go.mod file. Explicit setup
+is optional and lets you customize options: >lua
+    require("go-mod").setup({ check_interval = 30 })
 <
+With auto_check enabled, setup also considers an already-open go.mod buffer.
+Save your file and use :GoModCheck before starting an update.
 
 ==============================================================================
-4. CONFIGURATION                                    *go-mod-configuration*
+3. Configuration                                    *go-mod-configuration*
 
-Default configuration:
->lua
+Defaults: >lua
     require("go-mod").setup({
-      -- Icons for the signs
       icons = {
         outdated = "󰚰 ",
         up_to_date = "󰄬 ",
         unpublished = "󰚯 ",
         error = "󰅚 ",
       },
-      -- Virtual text options
       virtual_text = {
         prefix = "●",
         spacing = 4,
       },
-      -- Highlight groups
       highlights = {
         outdated = "DiagnosticWarn",
-        up_to_date = "DiagnosticOk",
+        up_to_date = "DiagnosticHint",
         unpublished = "DiagnosticInfo",
         error = "DiagnosticError",
       },
-      -- Auto check on file open
       auto_check = true,
-      -- Check interval in minutes (0 to disable)
       check_interval = 60,
-      -- Log level: "trace", "debug", "info", "warn", "error"
       log_level = "info",
-      -- Log file path (empty for no file logging)
       log_file = vim.fn.stdpath("cache") .. "/go-mod.log",
+      max_concurrent_jobs = 4,
+      timeout = 30000,
     })
 <
+virtual_text.prefix is displayed before status text; spacing is the number of
+spaces separating virtual text from the source line. Highlights name existing
+highlight groups.
+
+auto_check enables automatic checks. check_interval is in MINUTES: a positive
+value refreshes loaded go.mod buffers periodically, without requiring a buffer
+switch. Set it to 0 to disable timer and re-entry refreshes while retaining the
+initial automatic check. For manual checks only, set auto_check to false and
+check_interval to 0.
+
+max_concurrent_jobs limits concurrent version lookups. timeout is the per-Go-
+process timeout in MILLISECONDS.
+
+log_level accepts "trace", "debug", "info", "warn", or "error". log_file is a
+file path; an empty string disables file logging. See |go-mod-troubleshooting|.
 
 ==============================================================================
-5. COMMANDS                                              *go-mod-commands*
+4. Commands and picker                                   *go-mod-commands*
 
 *:GoModCheck*
-    Check dependencies in the current go.mod file
+    Check required module paths in the current go.mod buffer.
 
 *:GoModToggle*
-    Toggle the display of dependency information
+    Toggle dependency virtual text in the current buffer.
+
+*:GoModUpdate*
+    Open a picker of outdated modules from the current check results.
+
+*:GoModUpdate-module*
+    :GoModUpdate {module-path}
+    Update one outdated module. Completion lists outdated module paths.
 
 *:GoModLog*
-    Open the go-mod log file in a new buffer
+    Open the configured log file. Set a nonempty log_file to enable file logging.
+
+*:GoModSetup*
+    Initialize with defaults. Usually unnecessary with automatic loading or
+    an explicit setup() call.
+
+Picker keys:                                             *go-mod-picker*
+    Space, Enter    Toggle the module under the cursor.
+    a               Toggle all selections.
+    u               Update selected modules.
+    U               Update all listed modules.
+    Tab, Shift-Tab  Move between footer actions; Enter activates one.
+    Esc, q, c       Close the picker.
+
+Normal Neovim motions move between rows. No global mappings are installed.
+
+Updates reject unsaved buffers and files changed since the check. Save, then
+run :GoModCheck again if results are stale. Updates use the original go.mod
+buffer's directory even after changing buffers or the working directory.
+Selected versions are passed together to one go get command; Go resolves their
+constraints as a group and conflicting selections fail. Results are refreshed
+afterward. Inspect go.mod/go.sum and run your
+project's tests after updating.
+
+Avoid concurrent external edits while Go runs. Buffer edits made during an
+update are preserved; reload and check again when ready.
 
 ==============================================================================
-6. LOGGING                                                *go-mod-logging*
+5. Lua API                                                    *go-mod-api*
 
-The plugin includes a logging system that can output to both Neovim
-notifications and a log file. You can configure the log level and file path
-in the setup options.
-
-To view the log file, you can use:
->lua
-    require("go-mod.log").open()
+The public module is require("go-mod"). setup() accepts an optional options
+table; the main user actions are also available as Lua functions: >lua
+    local gomod = require("go-mod")
+    gomod.setup({})
+    gomod.check_dependencies()
+    gomod.toggle()
+    gomod.update_module("example.com/module")
+    gomod.update_all_modules()
 <
-
-Or use the command:
->
-    :GoModLog
-<
+These calls operate on the current go.mod buffer by default. All four action
+functions accept an optional buffer number (the second argument to
+update_module). Run a check first to populate
+update candidates. update_all_modules asks for confirmation before updating all
+outdated modules. Use commands or these entry points rather than internal core,
+UI, or updater state.
 
 ==============================================================================
-7. LICENSE                                                *go-mod-license*
+6. Go behavior                                           *go-mod-behavior*
 
-MIT License
+Lookups query the original required module path upstream, including when a
+replace directive exists. Local replacement contents are not checked for newer
+upstream versions. Private or offline lookups may error.
 
+Updates reject effective GOFLAGS containing -modfile, including persistent
+settings from go env -w, because they redirect writes away from the open
+go.mod. Remove the setting before updating with this plugin. External disk
+changes after a check also require a reload and a fresh check.
+
+Updates are performed by Go, which respects applicable replace directives.
+The plugin does not rewrite replacements or automatically migrate module paths
+and source imports across major-version boundaries, for example from
+example.com/lib to example.com/lib/v2.
+
+Go get may change transitive dependencies, go.sum, and, depending on the Go
+version and project, Go or toolchain directives. Review the resulting diff.
+
+Go follows the process and project environment: GOPROXY, GOPRIVATE, credentials,
+workspace settings, and applicable Go configuration. Private registry access
+must be configured outside this plugin.
+
+Go module resolution and versioning reference: https://go.dev/ref/mod
+
+==============================================================================
+7. Troubleshooting                                *go-mod-troubleshooting*
+
+Run :checkhealth go-mod to inspect prerequisites and configuration.
+
+- Check :echo executable('go') returns 1 and :set filetype? reports gomod.
+- Save edits, then run :GoModCheck before updating.
+- Run go list -m -json module/path@latest from the go.mod directory using the
+  same environment as Neovim to investigate lookup or authentication errors.
+- Use :GoModLog to inspect logs. The default path is stdpath("cache") followed
+  by /go-mod.log. log_file = "" disables file logging.
+- Temporarily set log_level = "debug" for more detail. Remove credentials,
+  private module names, and private paths before sharing logs or bug reports.
+- If icons are missing, install a Nerd Font or configure plain-text icons.
+
+==============================================================================
+8. License                                                *go-mod-license*
+
+MIT License, copyright (c) 2025 Roy Sun. See LICENSE in the repository for the
+full permission and warranty terms.
+
+vim:tw=78:ts=8:noet:ft=help:norl:

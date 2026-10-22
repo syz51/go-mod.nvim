@@ -1,222 +1,327 @@
--- Module update functionality for go-mod.nvim
+-- Completion-driven go get batches, serialized per module root.
 local M = {}
-
--- Import required modules
 local api = vim.api
-local plenary_job = require("plenary.job")
+local uv = vim.uv
 local core = require("go-mod.core")
+local config = require("go-mod.config")
 local ui = require("go-mod.ui")
 local log = require("go-mod.log")
+local parser = require("go-mod.parser")
+local batches = {}
 
--- Update a single module to its latest version
-function M.update_module(module_name)
-	local bufnr = api.nvim_get_current_buf()
+local function notify(message, level)
+	vim.notify(message, level or vim.log.levels.WARN)
+end
 
-	-- Validate buffer exists and is a go.mod file
+local function unchanged(source)
+	return api.nvim_buf_is_valid(source.bufnr)
+		and api.nvim_buf_is_loaded(source.bufnr)
+		and api.nvim_buf_get_name(source.bufnr) == source.name
+		and not vim.bo[source.bufnr].modified
+		and api.nvim_buf_get_changedtick(source.bufnr) == source.tick
+		and uv.fs_realpath(source.name) == source.path
+end
+
+local function disk_contents(path)
+	local file = io.open(path, "rb")
+	if not file then
+		return nil
+	end
+	local content = file:read("*a")
+	file:close()
+	return content
+end
+
+local function saved_contents(bufnr)
+	local separator = vim.bo[bufnr].fileformat == "dos" and "\r\n" or "\n"
+	local content = table.concat(api.nvim_buf_get_lines(bufnr, 0, -1, false), separator)
+	if vim.bo[bufnr].endofline then
+		content = content .. separator
+	end
+	return (vim.bo[bufnr].bomb and "\239\187\191" or "") .. content
+end
+
+-- Check both the file identity and bytes: changedtick cannot detect external writes.
+local function snapshot_unchanged(source)
+	local stat = uv.fs_stat(source.path)
+	return unchanged(source)
+		and stat
+		and stat.dev == source.dev
+		and stat.ino == source.ino
+		and disk_contents(source.path) == source.content
+		and saved_contents(source.bufnr) == source.content
+end
+
+local function capture(bufnr)
+	bufnr = (not bufnr or bufnr == 0) and api.nvim_get_current_buf() or bufnr
+	if not api.nvim_buf_is_valid(bufnr) or not api.nvim_buf_is_loaded(bufnr) then
+		notify("Open a saved go.mod buffer and run a dependency check first.")
+		return
+	end
+	local name = api.nvim_buf_get_name(bufnr)
+	local path = uv.fs_realpath(name)
+	if vim.fn.fnamemodify(name, ":t") ~= "go.mod" or not path then
+		notify("Save this buffer as go.mod and run a dependency check first.")
+		return
+	end
+	if vim.bo[bufnr].modified then
+		notify("Save go.mod and run a dependency check before updating.")
+		return
+	end
+	local root = vim.fn.fnamemodify(path, ":h")
+	local tick = api.nvim_buf_get_changedtick(bufnr)
+	local data = core.get_buffer_info(bufnr)
 	if
-		not api.nvim_buf_is_valid(bufnr) or (vim.bo[bufnr].filetype ~= "gomod" and vim.bo[bufnr].filetype ~= "go.mod")
+		not data
+		or not data.last_check
+		or not data.modules
+		or data.changedtick ~= tick
+		or not data.root
+		or uv.fs_realpath(data.root) ~= root
 	then
-		log.error("Not a valid go.mod buffer")
+		notify("Run a dependency check for this saved go.mod before updating.")
 		return
 	end
-
-	-- Check if module exists in current buffer
-	local buffer_data = core.get_buffer_info(bufnr)
-	if not buffer_data or not buffer_data.modules or not buffer_data.modules[module_name] then
-		log.error("Module not found: " .. module_name)
-		vim.notify("Module not found: " .. module_name, vim.log.levels.ERROR)
+	local content, stat = disk_contents(path), uv.fs_stat(path)
+	if not content or not stat or content ~= saved_contents(bufnr) then
+		notify("go.mod changed on disk. Reload it and run a dependency check before updating.")
 		return
 	end
+	return {
+		bufnr = bufnr,
+		name = name,
+		path = path,
+		root = root,
+		tick = tick,
+		content = content,
+		dev = stat.dev,
+		ino = stat.ino,
+		modules = vim.deepcopy(data.modules),
+	}
+end
 
-	local module_info = buffer_data.modules[module_name]
+local function outdated(source)
+	local names = {}
+	for name, info in pairs(source.modules) do
+		if info.status == "outdated" and type(info.latest) == "string" and info.latest ~= "" then
+			table.insert(names, name)
+		end
+	end
+	table.sort(names)
+	return names
+end
 
-	-- Only update if module is outdated
-	if module_info.status ~= "outdated" then
-		log.info("Module " .. module_name .. " is not outdated, skipping update")
-		vim.notify("Module " .. module_name .. " is already up to date", vim.log.levels.INFO)
+-- Reload only the captured, unchanged buffer. Preserve views in all its windows.
+local function synchronize(source)
+	if not unchanged(source) then
+		return false
+	end
+	local views = {}
+	for _, win in ipairs(api.nvim_list_wins()) do
+		if api.nvim_win_get_buf(win) == source.bufnr then
+			api.nvim_win_call(win, function()
+				views[win] = vim.fn.winsaveview()
+			end)
+		end
+	end
+	local ok = pcall(api.nvim_buf_call, source.bufnr, function()
+		if not unchanged(source) then
+			error("go.mod changed")
+		end
+		vim.cmd("silent noautocmd keepalt edit!")
+	end)
+	for win, view in pairs(views) do
+		if api.nvim_win_is_valid(win) and api.nvim_win_get_buf(win) == source.bufnr then
+			api.nvim_win_call(win, function()
+				vim.fn.winrestview(view)
+			end)
+		end
+	end
+	return ok
+		and api.nvim_buf_is_valid(source.bufnr)
+		and api.nvim_buf_get_name(source.bufnr) == source.name
+		and not vim.bo[source.bufnr].modified
+end
+
+local function start_batch(source, names)
+	if not snapshot_unchanged(source) then
+		notify("go.mod changed. Save it and run a dependency check before updating.")
 		return
 	end
+	if batches[source.root] then
+		notify("An update is already running for " .. source.root .. ". Wait for it to finish.")
+		return
+	end
+	local queue, seen = {}, {}
+	for _, name in ipairs(names) do
+		local info = source.modules[name]
+		if not info or info.status ~= "outdated" or type(info.latest) ~= "string" or info.latest == "" then
+			notify("No checked update available for " .. tostring(name) .. ". Run a dependency check first.")
+			return
+		end
+		if not seen[name] then
+			seen[name] = true
+			table.insert(queue, { name = name, latest = info.latest })
+		end
+	end
+	if #queue == 0 then
+		notify("No outdated modules found", vim.log.levels.INFO)
+		return
+	end
+	batches[source.root] = source
+	local started, finished = false, false
+	local function finish(reason)
+		if finished then
+			return
+		end
+		finished = true
+		local completed = 0
+		if started then
+			local content = disk_contents(source.path)
+			local actual = content and uv.fs_realpath(source.name) == source.path and parser.parse(content)
+			for _, item in ipairs(queue) do
+				if actual and actual[item.name] and actual[item.name].current == item.latest then
+					completed = completed + 1
+				end
+			end
+			if not reason and completed ~= #queue then
+				reason = "Final go.mod requirements differ from the selected versions. Inspect go.mod and check again."
+			end
+		end
+		-- Keep the root locked through synchronization and the final notification.
+		local synced = started and synchronize(source)
+		if reason then
+			notify(
+				string.format("Verified %d/%d selected versions. %s", completed, #queue, reason),
+				vim.log.levels.ERROR
+			)
+		else
+			notify(string.format("Successfully updated %d modules", completed), vim.log.levels.INFO)
+		end
+		if started and not synced then
+			notify(
+				"go.mod changed during the update; your edits were preserved. Reload when ready, save, and run a dependency check."
+			)
+		end
+		batches[source.root] = nil
+		if synced then
+			core.check_dependencies(source.bufnr)
+		end
+	end
+	local function run(argv, callback)
+		local settled = false
+		local ok, err = pcall(
+			vim.system,
+			argv,
+			{
+				cwd = source.root,
+				text = true,
+				timeout = config.options.timeout or 30000,
+			},
+			vim.schedule_wrap(function(result)
+				if settled or finished then
+					return
+				end
+				settled = true
+				if result.code ~= 0 or (result.signal and result.signal ~= 0) then
+					local reason = result.code == 124 and "timed out" or ("exited with code " .. tostring(result.code))
+					log.error("go " .. argv[2] .. " " .. reason .. "\n" .. (result.stderr or ""))
+					local context = argv[2] == "get" and "Failed to update selected modules: " or ""
+					finish(context .. "go " .. argv[2] .. " " .. reason .. ". See log for details.")
+				else
+					callback(result)
+				end
+			end)
+		)
+		if not ok then
+			settled = true
+			if argv[2] == "get" then
+				started = false
+			end
+			log.error("Failed to start go " .. argv[2] .. ": " .. tostring(err))
+			finish("Failed to start go " .. argv[2] .. ". See log for details.")
+		end
+	end
+	-- Go resolves process GOFLAGS and persistent `go env -w GOFLAGS` itself.
+	-- Query it asynchronously under the same lock before any mutating command.
+	run({ "go", "env", "GOFLAGS" }, function(result)
+		if (result.stdout or ""):find("-modfile", 1, true) then
+			finish(
+				"Effective GOFLAGS contains -modfile. Remove it from the environment or go env -w GOFLAGS, then retry."
+			)
+			return
+		end
+		if not snapshot_unchanged(source) then
+			finish("go.mod changed before the update. Reload or save it and run a dependency check again.")
+			return
+		end
+		local argv = { "go", "get" }
+		for _, item in ipairs(queue) do
+			argv[#argv + 1] = item.name .. "@" .. item.latest
+		end
+		core.invalidate_buffer(source.bufnr)
+		notify(string.format("Updating %d modules...", #queue), vim.log.levels.INFO)
+		started = true
+		run(argv, function()
+			finish()
+		end)
+	end)
+end
 
-	-- Get the current directory (assuming it's the Go module root)
-	local cwd = vim.fn.getcwd()
+function M.update_modules(module_names, bufnr)
+	local source = capture(bufnr)
+	if source then
+		start_batch(source, module_names)
+	end
+end
 
-	-- Show notification that update is starting
-	vim.notify(
-		"Updating " .. module_name .. " from " .. module_info.current .. " to " .. module_info.latest .. "...",
-		vim.log.levels.INFO
+function M.update_module(module_name, bufnr)
+	M.update_modules({ module_name }, bufnr)
+end
+
+function M.update_all_modules(bufnr)
+	local source = capture(bufnr)
+	if not source then
+		return
+	end
+	local names = outdated(source)
+	if #names == 0 then
+		notify("No outdated modules found", vim.log.levels.INFO)
+		return
+	end
+	vim.ui.select(
+		{ "Yes", "No" },
+		{ prompt = string.format("Update all %d outdated modules?", #names) },
+		function(choice)
+			if choice == "Yes" then
+				start_batch(source, names)
+			end
+		end
 	)
-
-	-- Run go get to update the module
-	plenary_job
-		:new({
-			command = "go",
-			args = { "get", module_name .. "@" .. module_info.latest },
-			cwd = cwd,
-			on_exit = function(j, return_val)
-				if return_val == 0 then
-					vim.schedule(function()
-						vim.notify(
-							"Successfully updated " .. module_name .. " to " .. module_info.latest,
-							vim.log.levels.INFO
-						)
-
-						-- Re-check dependencies after update
-						core.check_dependencies()
-					end)
-				else
-					local stderr = table.concat(j:stderr_result(), "\n")
-					log.error("Failed to update " .. module_name .. ": " .. stderr)
-					vim.schedule(function()
-						vim.notify("Failed to update " .. module_name .. ". See log for details.", vim.log.levels.ERROR)
-					end)
-				end
-			end,
-		})
-		:start()
 end
 
--- Update all outdated modules
-function M.update_all_modules()
-	local bufnr = api.nvim_get_current_buf()
-
-	-- Validate buffer exists and is a go.mod file
-	if
-		not api.nvim_buf_is_valid(bufnr) or (vim.bo[bufnr].filetype ~= "gomod" and vim.bo[bufnr].filetype ~= "go.mod")
-	then
-		log.error("Not a valid go.mod buffer")
-		return
-	end
-
-	-- Check if we have any modules to update
-	local buffer_data = core.get_buffer_info(bufnr)
-	if not buffer_data or not buffer_data.modules then
-		log.error("No module information available")
-		vim.notify("No module information available. Run check first.", vim.log.levels.ERROR)
-		return
-	end
-
-	-- Find outdated modules
-	local outdated_modules = {}
-	for module_name, info in pairs(buffer_data.modules) do
-		if info.status == "outdated" then
-			table.insert(outdated_modules, {
-				name = module_name,
-				current = info.current,
-				latest = info.latest,
-			})
-		end
-	end
-
-	-- Check if there are any outdated modules
-	if #outdated_modules == 0 then
-		vim.notify("No outdated modules found", vim.log.levels.INFO)
-		return
-	end
-
-	-- Sort modules by name
-	table.sort(outdated_modules, function(a, b)
-		return a.name < b.name
-	end)
-
-	-- Ask for confirmation before updating all modules
-	local total = #outdated_modules
-	local confirm_msg = string.format("Update all %d outdated modules?", total)
-
-	vim.ui.select({ "Yes", "No" }, {
-		prompt = confirm_msg,
-	}, function(choice)
-		if choice == "Yes" then
-			-- Update all outdated modules one by one
-			vim.notify(string.format("Updating %d modules...", total), vim.log.levels.INFO)
-
-			-- Update modules one by one to avoid conflicts
-			local function update_next(index)
-				if index <= #outdated_modules then
-					local module = outdated_modules[index]
-					M.update_module(module.name)
-
-					-- Schedule next update with a slight delay
-					vim.defer_fn(function()
-						update_next(index + 1)
-					end, 1000) -- 1 second delay between updates
-				else
-					vim.notify("All modules updated successfully", vim.log.levels.INFO)
-				end
-			end
-
-			update_next(1)
-		end
-	end)
-end
-
--- Get list of outdated modules (for command completion)
 function M.get_outdated_modules()
-	local bufnr = api.nvim_get_current_buf()
-
-	if not api.nvim_buf_is_valid(bufnr) then
-		return {}
-	end
-
-	local buffer_data = core.get_buffer_info(bufnr)
-	if buffer_data and buffer_data.modules then
-		local completions = {}
-		for module_name, info in pairs(buffer_data.modules) do
-			if info.status == "outdated" then
-				table.insert(completions, module_name)
-			end
-		end
-		return completions
-	end
-
-	return {}
+	local data = core.get_buffer_info(api.nvim_get_current_buf())
+	return data and data.modules and outdated(data) or {}
 end
 
--- Show a window with all outdated modules and allow selection
-function M.update_selection_window()
-	local bufnr = api.nvim_get_current_buf()
-
-	-- Validate buffer exists and is a go.mod file
-	if
-		not api.nvim_buf_is_valid(bufnr) or (vim.bo[bufnr].filetype ~= "gomod" and vim.bo[bufnr].filetype ~= "go.mod")
-	then
-		log.error("Not a valid go.mod buffer")
+function M.update_selection_window(bufnr)
+	local source = capture(bufnr)
+	if not source then
 		return
 	end
-
-	-- Check if we have any modules to update
-	local buffer_data = core.get_buffer_info(bufnr)
-	if not buffer_data or not buffer_data.modules then
-		log.error("No module information available")
-		vim.notify("No module information available. Run check first.", vim.log.levels.ERROR)
+	local modules = {}
+	for _, name in ipairs(outdated(source)) do
+		local info = source.modules[name]
+		table.insert(modules, { name = name, current = info.current, latest = info.latest })
+	end
+	if #modules == 0 then
+		notify("No outdated modules found", vim.log.levels.INFO)
 		return
 	end
-
-	-- Find outdated modules
-	local outdated_modules = {}
-	for module_name, info in pairs(buffer_data.modules) do
-		if info.status == "outdated" then
-			table.insert(outdated_modules, {
-				name = module_name,
-				current = info.current,
-				latest = info.latest,
-			})
-		end
-	end
-
-	-- Check if there are any outdated modules
-	if #outdated_modules == 0 then
-		vim.notify("No outdated modules found", vim.log.levels.INFO)
-		return
-	end
-
-	-- Sort modules by name
-	table.sort(outdated_modules, function(a, b)
-		return a.name < b.name
+	ui.show_update_window(modules, function(names)
+		start_batch(source, names)
 	end)
-
-	-- Show the UI for selecting modules to update
-	ui.show_update_window(outdated_modules, M.update_module)
 end
 
--- Return the module
 return M

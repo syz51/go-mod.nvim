@@ -1,136 +1,94 @@
--- Logging module for go-mod.nvim
 local M = {}
+local config = { log_level = "info", log_file = "" }
+local levels = { trace = 1, debug = 2, info = 3, warn = 4, error = 5 }
 
--- Default configuration
-local config = {
-	log_level = "info",
-	log_file = "",
-}
+local function notify(message, level)
+	local function show()
+		vim.notify(message, level, { title = "go-mod.nvim" })
+	end
+	if vim.in_fast_event() then
+		vim.schedule(show)
+	else
+		show()
+	end
+end
 
--- Log levels
-local levels = {
-	trace = 1,
-	debug = 2,
-	info = 3,
-	warn = 4,
-	error = 5,
-}
-
--- Setup logger
 function M.setup(opts)
-	config = vim.tbl_deep_extend("force", config, {
-		log_level = opts.log_level,
-		log_file = opts.log_file,
-	})
-
-	-- Create log file if it doesn't exist and path is specified
+	config = { log_level = opts.log_level or "info", log_file = opts.log_file or "" }
 	if config.log_file ~= "" then
-		local Path = require("plenary.path")
-		local log_dir = Path:new(config.log_file):parent()
-		if not log_dir:exists() then
-			log_dir:mkdir({ parents = true })
-		end
-
-		-- Test if we can write to the log file
-		local file = io.open(config.log_file, "a")
+		local parent = vim.fn.fnamemodify(config.log_file, ":h")
+		local ok = pcall(vim.fn.mkdir, parent, "p")
+		local file = ok and io.open(config.log_file, "a")
 		if file then
 			file:write("--- Log initialized at " .. os.date("%Y-%m-%d %H:%M:%S") .. " ---\n")
 			file:close()
 		else
-			vim.notify("Failed to open log file: " .. config.log_file, vim.log.levels.ERROR)
+			notify("Cannot write log file: " .. config.log_file .. ". File logging disabled.", vim.log.levels.WARN)
 			config.log_file = ""
 		end
 	end
-
-	M.info("Logger initialized with level: " .. config.log_level)
 end
 
--- Get log level as number
-local function get_level_number(level)
-	return levels[level] or levels.info
-end
-
--- Internal logging function
-local function log(level, msg)
-	if get_level_number(level) >= get_level_number(config.log_level) then
-		-- Format the log message
-		local log_msg = string.format("[%s] [%s] %s", os.date("%H:%M:%S"), level:upper(), msg)
-
-		-- Log to Neovim (only for warn and error by default)
-		if level == "warn" or level == "error" or config.log_level == "debug" or config.log_level == "trace" then
-			local log_level = vim.log.levels[level:upper()] or vim.log.levels.INFO
-			vim.notify(log_msg, log_level)
-		end
-
-		-- Log to file if configured
-		if config.log_file ~= "" then
-			local file = io.open(config.log_file, "a")
-			if file then
-				file:write(os.date("%Y-%m-%d ") .. log_msg .. "\n")
-				file:close()
-			end
-		end
+local function log(level, message)
+	if levels[level] < (levels[config.log_level] or levels.info) then
+		return
 	end
-end
-
--- Public logging functions
-function M.trace(msg)
-	log("trace", msg)
-end
-
-function M.debug(msg)
-	log("debug", msg)
-end
-
-function M.info(msg)
-	log("info", msg)
-end
-
-function M.warn(msg)
-	log("warn", msg)
-end
-
-function M.error(msg)
-	log("error", msg)
-end
-
--- Open the log file in a new buffer
-function M.open()
+	local formatted = string.format("[%s] [%s] %s", os.date("%H:%M:%S"), level:upper(), tostring(message))
+	if level == "warn" or level == "error" or (levels[config.log_level] or levels.info) <= levels.debug then
+		notify(formatted, vim.log.levels[level:upper()] or vim.log.levels.INFO)
+	end
 	if config.log_file ~= "" then
-		-- Check if file exists
-		local file = io.open(config.log_file, "r")
+		local file = io.open(config.log_file, "a")
 		if file then
+			file:write(os.date("%Y-%m-%d ") .. formatted .. "\n")
 			file:close()
-			vim.cmd("edit " .. config.log_file)
-			-- Set up buffer for log viewing
-			local bufnr = vim.api.nvim_get_current_buf()
-			-- Set buffer options
-			vim.bo[bufnr].modifiable = false
-			vim.bo[bufnr].buftype = "nofile"
-			vim.bo[bufnr].filetype = "log"
-			-- Add autocmd to reload log when buffer is shown
-			local group = vim.api.nvim_create_augroup("GoModLogView", { clear = true })
-			vim.api.nvim_create_autocmd({ "BufEnter" }, {
-				pattern = config.log_file,
-				group = group,
-				callback = function()
-					local current_bufnr = vim.api.nvim_get_current_buf()
-					vim.bo[current_bufnr].modifiable = true
-					vim.cmd("silent! %delete_")
-					vim.cmd("silent! read " .. config.log_file)
-					vim.cmd("silent! 1delete_")
-					vim.bo[current_bufnr].modifiable = false
-					vim.bo[current_bufnr].modified = false
-					vim.cmd("normal! G")
-				end,
-			})
-		else
-			vim.notify("Log file does not exist: " .. config.log_file, vim.log.levels.WARN)
 		end
-	else
-		vim.notify("No log file configured", vim.log.levels.WARN)
 	end
 end
 
--- Return the module
+for name in pairs(levels) do
+	M[name] = function(message)
+		log(name, message)
+	end
+end
+
+function M.open()
+	if config.log_file == "" then
+		notify("No log file configured. Set log_file in setup() to enable file logging.", vim.log.levels.WARN)
+		return
+	end
+	local path = config.log_file
+	if vim.fn.filereadable(path) ~= 1 then
+		notify("Log file does not exist: " .. path, vim.log.levels.WARN)
+		return
+	end
+	local existing = vim.fn.bufnr("go-mod-log://" .. path)
+	if existing ~= -1 and vim.api.nvim_buf_is_valid(existing) then
+		vim.api.nvim_set_current_buf(existing)
+		vim.api.nvim_exec_autocmds("BufEnter", { buffer = existing })
+		return
+	end
+	-- A scratch view avoids Ex filename parsing and leaves the real file untouched.
+	local buf = vim.api.nvim_create_buf(false, true)
+	vim.api.nvim_buf_set_name(buf, "go-mod-log://" .. path)
+	vim.bo[buf].bufhidden = "wipe"
+	vim.bo[buf].filetype = "log"
+	local function refresh()
+		if not vim.api.nvim_buf_is_valid(buf) then
+			return
+		end
+		local ok, lines = pcall(vim.fn.readfile, path)
+		if ok then
+			vim.bo[buf].modifiable = true
+			vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+			vim.bo[buf].modifiable = false
+			vim.bo[buf].modified = false
+		end
+	end
+	refresh()
+	vim.api.nvim_create_autocmd("BufEnter", { buffer = buf, callback = refresh })
+	vim.api.nvim_set_current_buf(buf)
+	vim.api.nvim_win_set_cursor(0, { math.max(1, vim.api.nvim_buf_line_count(buf)), 0 })
+end
+
 return M

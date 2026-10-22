@@ -1,0 +1,24 @@
+name: Bug report
+description: Report a reproducible problem with go-mod.nvim.
+body:
+  - type: textarea
+    id: versions
+    attributes:
+      label: Versions and environment
+      description: Include Neovim, Go, go-mod.nvim revision, OS, and relevant checkhealth output. Remove private paths and credentials.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Minimal reproduction
+      description: Include minimal plugin setup, a small go.mod, commands or picker keys, and relevant Go environment settings. Replace private module names when possible.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+      description: Include errors or relevant GoModLog output after removing sensitive details.
+    validations:
+      required: true

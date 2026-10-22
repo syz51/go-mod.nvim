@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.1.1 - 2026-10-23
+
+- Publish GitHub releases automatically after tag CI passes, using release
+  notes from the changelog and the built-in GitHub token.
+- Add real lazy.nvim installation and loading integration tests with LazyVim's
+  normal plugin import and defaults.
+- Document LazyVim installation, release selection, and automatic setup.
+
 ## 0.1.0 - 2026-10-23
 
 - Require Neovim 0.12 or newer and use native process execution, removing the

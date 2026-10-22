@@ -15,6 +15,12 @@ make test
 make format-check
 ```
 
+Run `make test-lazy` for installation/loading integration coverage with real
+lazy.nvim and the ordinary imported plugin specs used by LazyVim. This separate
+check needs Git and network access to bootstrap lazy.nvim; Go module responses
+remain controlled, so it never queries a live Go module. It isolates all config,
+plugin checkouts, locks, caches, and state in temporary directories.
+
 Set `NVIM=/path/to/nvim` to select a Neovim executable. Use `make format` to
 format Lua files with the repository's `stylua.toml`.
 
@@ -49,24 +55,26 @@ anything you could not run.
 
 ## Releases
 
-Releases are published manually from a verified commit on `main`. CI runs tests
-and formatting on pushes (including tags) and pull requests; it does not create
-tags or GitHub releases.
+Releases are published automatically when a maintainer pushes an annotated
+SemVer tag. Branch pushes and pull requests run CI. A `v*` tag starts the
+`Release` workflow, which reuses the same tests, formatting, and lazy.nvim
+installation checks for that exact tagged commit before publishing.
 
-1. Run `make test` and `make format-check`. Move the changes being released from
-   `Unreleased` into a dated version section in `CHANGELOG.md`, leaving
+1. Run `make test`, `make test-lazy`, and `make format-check`. Move the released
+   changes from `Unreleased` into a dated version section in `CHANGELOG.md`, leaving
    `Unreleased` for future changes. Review and commit the release changes.
-2. Push `main`. Record `git rev-parse HEAD` and require both CI jobs to pass for
+2. Push `main`. Record `git rev-parse HEAD` and require all CI jobs to pass for
    that exact SHA. Find the run with `gh run list --workflow CI --branch main`,
    check its head SHA, then use `gh run watch RUN_ID --exit-status`.
 3. Create an annotated tag on that verified SHA and push only that tag: for
-   example, `git tag -a v0.1.1 VERIFIED_SHA -m "Release v0.1.1"`, followed by
-   `git push origin refs/tags/v0.1.1`. Choose an unused version; never move a
+   example, `git tag -a v0.1.2 VERIFIED_SHA -m "Release v0.1.2"`, followed by
+   `git push origin refs/tags/v0.1.2`. Choose an unused version; never move a
    published tag.
-4. Wait for the tag-triggered CI run to pass too. Copy the relevant changelog
-   section and compatibility requirements into a release-notes file, then run
-   `gh release create v0.1.1 --verify-tag --title "v0.1.1" --notes-file NOTES_FILE`.
-   Use `--prerelease` for a prerelease and `--latest` for a regular release.
+4. Watch `Release` in GitHub Actions. It requires the tag to target a commit
+   in `origin/main` history, validates a nonempty `VERSION - YYYY-MM-DD` section
+   in `CHANGELOG.md`, and publishes notes extracted from that section only after
+   every check passes. Regular versions become the latest release;
+   `v0.1.2-rc.1`-style tags become prereleases.
 5. Verify the published release, tag target, and source archive. Users can pin
    the tag in their plugin manager. There are no compiled assets or separate
    package-registry uploads.
@@ -74,3 +82,10 @@ tags or GitHub releases.
 If a check fails, fix it in a new commit and rerun validation before tagging.
 If an already-pushed tag has a problem, publish a new version instead of
 rewriting it.
+
+For a transient infrastructure failure, rerun the failed Actions run. Repeated
+runs leave an already-published release unchanged; an existing draft requires
+manual resolution. The publish job alone has `contents: write` and uses the
+built-in `GITHUB_TOKEN`, so no personal access token or registry credentials
+are needed. Push tags using a maintainer's Git credentials: tags pushed by
+`GITHUB_TOKEN` do not trigger another workflow.

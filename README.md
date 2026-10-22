@@ -17,6 +17,7 @@ With [lazy.nvim](https://github.com/folke/lazy.nvim):
 ```lua
 {
   "syz51/go-mod.nvim",
+  version = "*", -- latest stable tagged release
   ft = "gomod",
   opts = {},
 }
@@ -32,6 +33,34 @@ require("go-mod").setup({
 ```
 
 A file already open when setup runs is also eligible for automatic checking.
+
+### LazyVim
+
+Create `~/.config/nvim/lua/plugins/go-mod.lua`:
+
+```lua
+return {
+  {
+    "syz51/go-mod.nvim",
+    version = "*",
+    ft = "gomod",
+    opts = {
+      check_interval = 60,
+    },
+  },
+}
+```
+
+Restart Neovim and run `:Lazy install go-mod.nvim`. Open a `go.mod` file to
+load the plugin and start checking dependencies, then run `:checkhealth go-mod`.
+The plugin remains unloaded for unrelated filetypes. `opts` is passed to
+`require("go-mod").setup()` automatically; no custom `config` function or
+separate setup call is needed. No LazyVim Go extra or Plenary dependency is
+required.
+
+`version = "*"` selects tagged stable releases, overriding LazyVim's default
+of following the repository branch. Use `:Lazy update go-mod.nvim` to get a
+newer release. For an exact pin, replace `version` with `tag = "v0.1.0"`.
 
 ## Usage
 

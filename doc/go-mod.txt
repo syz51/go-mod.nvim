@@ -34,6 +34,7 @@ Dependency status is shown as virtual text on require entries in go.mod:
 With lazy.nvim: >lua
     {
       "syz51/go-mod.nvim",
+      version = "*",
       ft = "gomod",
       opts = {},
     }
@@ -45,6 +46,22 @@ is optional and lets you customize options: >lua
 <
 With auto_check enabled, setup also considers an already-open go.mod buffer.
 Save your file and use :GoModCheck before starting an update.
+
+LazyVim: create ~/.config/nvim/lua/plugins/go-mod.lua with a returned spec list: >lua
+    return {
+      {
+        "syz51/go-mod.nvim",
+        version = "*",
+        ft = "gomod",
+        opts = { check_interval = 60 },
+      },
+    }
+<
+Restart Neovim, run :Lazy install go-mod.nvim, and open go.mod. The filetype
+loads the plugin; opts calls setup automatically. No custom config function,
+Go extra, or Plenary dependency is needed. version = "*" follows stable tags;
+:Lazy update go-mod.nvim updates it. Use tag = "v0.1.0" instead of version for
+an exact pin.
 
 ==============================================================================
 3. Configuration                                    *go-mod-configuration*

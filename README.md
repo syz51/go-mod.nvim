@@ -7,8 +7,12 @@ which outdated modules to update.
 ## Requirements
 
 - Neovim **0.12 or newer**
-- Go **1.16 or newer**, available as `go` in Neovim's `PATH`
+- Go **1.27.3 or newer**, available as `go` in Neovim's `PATH`
 - A Nerd Font for the default icons, or your own text icons
+
+Support and CI track the latest stable Go release; legacy Go toolchains are
+not maintained. CI runs the offline standalone specs with the latest stable Go
+on Ubuntu with Neovim v0.12.0, and on Ubuntu and macOS with stable Neovim.
 
 ## Installation
 
@@ -199,6 +203,9 @@ covered in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 Tagged versions are available on the [releases page](https://github.com/syz51/go-mod.nvim/releases).
 To pin a release with lazy.nvim, add `tag = "v0.1.2"` to the installation spec.
+
+For supported security versions and private vulnerability reports, see
+[SECURITY.md](SECURITY.md).
 
 ## License
 

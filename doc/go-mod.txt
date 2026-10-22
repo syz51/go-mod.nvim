@@ -17,9 +17,13 @@ Repository: https://github.com/syz51/go-mod.nvim
 ==============================================================================
 1. Requirements                                      *go-mod-requirements*
 
-Neovim >=0.12 and Go >=1.16 on PATH are required. No external Lua dependencies
+Neovim >=0.12 and Go >=1.27.3 on PATH are required. No external Lua dependencies
 are needed.
 The default icons need a Nerd Font; configure text icons if preferred.
+
+Support and CI track the latest stable Go release; legacy Go toolchains are
+not maintained. CI runs offline standalone specs with the latest stable Go
+on Ubuntu with Neovim v0.12.0, and on Ubuntu and macOS with stable Neovim.
 
 Dependency status is shown as virtual text on require entries in go.mod:
     outdated       A newer version is available for this module path.

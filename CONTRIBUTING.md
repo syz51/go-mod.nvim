@@ -7,7 +7,8 @@ is a clear need.
 
 ## Local checks
 
-Install Neovim >=0.12, Go >=1.16, and StyLua **2.3.1**. The plugin has no
+Install Neovim >=0.12, the latest stable Go (baseline **1.27.3 or newer**), and
+StyLua **2.3.1**. The plugin has no
 external Lua dependencies; the test runner never downloads tools:
 
 ```sh
@@ -38,6 +39,12 @@ module fixtures/proxies so tests work offline; do not query live public modules,
 rely on private credentials, or touch the contributor's Go project. CI runs
 stable Neovim with Go available and module downloads disabled during
 the specs.
+
+Support and CI track the latest stable Go release; legacy Go toolchains are
+not maintained. Every CI compatibility leg uses the latest stable Go: Neovim
+0.12.0 on Linux, plus stable Neovim on Linux and macOS.
+Pull requests must pass `test`, `format`, and
+`lazy-loading` before merging into `main`.
 
 ## Manual checks
 
@@ -73,8 +80,10 @@ installation checks for that exact tagged commit before publishing.
 4. Watch `Release` in GitHub Actions. It requires the tag to target a commit
    in `origin/main` history, validates a nonempty `VERSION - YYYY-MM-DD` section
    in `CHANGELOG.md`, and publishes notes extracted from that section only after
-   every check passes. Regular versions become the latest release;
-   `v0.1.2-rc.1`-style tags become prereleases.
+   every check passes. A regular version becomes Latest only if it is newer
+   than every published stable release; older maintenance releases do not
+   replace Latest. `v0.1.2-rc.1`-style tags become prereleases. Publishing is
+   serialized so concurrent releases cannot race to update Latest.
 5. Verify the published release, tag target, and source archive. Users can pin
    the tag in their plugin manager. There are no compiled assets or separate
    package-registry uploads.
@@ -82,6 +91,10 @@ installation checks for that exact tagged commit before publishing.
 If a check fails, fix it in a new commit and rerun validation before tagging.
 If an already-pushed tag has a problem, publish a new version instead of
 rewriting it.
+
+GitHub rules require pull requests and passing checks on `main`, and block
+force pushes and deletion. Release tags matching `v*` cannot be updated or
+deleted. No approval is required for the solo-maintainer workflow.
 
 For a transient infrastructure failure, rerun the failed Actions run. Repeated
 runs leave an already-published release unchanged; an existing draft requires

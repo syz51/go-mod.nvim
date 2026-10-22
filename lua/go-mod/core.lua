@@ -162,6 +162,13 @@ local function response(task, result)
 end
 
 local function start(task)
+	local request = task.request
+	if not request.state.first_lookup_started then
+		request.state.first_lookup_started = true
+		if config.options.notify_on_load then
+			vim.notify("Fetching dependency versions for go.mod…", vim.log.levels.INFO, { title = "go-mod.nvim" })
+		end
+	end
 	local ok, err = pcall(function()
 		task.job = vim.system(
 			{ "go", "list", "-m", "-json", task.name .. "@latest" },

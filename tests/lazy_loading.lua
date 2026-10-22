@@ -53,10 +53,14 @@ api.nvim_create_autocmd("User", {
 		end
 	end,
 })
-local errors = {}
-vim.notify = function(message, level)
+local errors, fetch_notices = {}, {}
+vim.notify = function(message, level, opts)
 	if level == vim.log.levels.ERROR then
 		errors[#errors + 1] = tostring(message)
+	end
+	if tostring(message):find("Fetching dependency versions for go.mod…", 1, true) then
+		assert(level == vim.log.levels.INFO and opts.title == "go-mod.nvim")
+		fetch_notices[#fetch_notices + 1] = message
 	end
 end
 
@@ -65,6 +69,8 @@ local real_system = vim.system
 local lookups = {}
 vim.system = function(argv, opts, callback)
 	if argv[1] == "go" and argv[2] == "list" then
+		assert(#fetch_notices == 1, "first-fetch notice must precede the first Go lookup and never repeat")
+		assert(fetch_notices[1] == "Fetching dependency versions for go.mod…", "notification must stay concise")
 		assert(vim.deep_equal(argv, { "go", "list", "-m", "-json", "example.test/dep@latest" }))
 		assert(opts.timeout == 1234, "lazy opts must reach the first lookup")
 		local job = { cwd = opts.cwd, callback = callback }
@@ -165,6 +171,7 @@ assert(
 	"first-file automatic check or LazyLoad event missing: " .. table.concat(errors, "\n")
 )
 assert(load_events == 1, "expected exactly one LazyLoad event")
+assert(#fetch_notices == 1, "lazy first-file check must notify exactly once")
 for _, job in ipairs(lookups) do
 	assert(
 		vim.uv.fs_realpath(job.cwd) == vim.uv.fs_realpath(module_root),

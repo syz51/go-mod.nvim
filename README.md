@@ -60,7 +60,7 @@ required.
 
 `version = "*"` selects tagged stable releases, overriding LazyVim's default
 of following the repository branch. Use `:Lazy update go-mod.nvim` to get a
-newer release. For an exact pin, replace `version` with `tag = "v0.1.0"`.
+newer release. For an exact pin, replace `version` with `tag = "v0.1.2"`.
 
 ## Usage
 
@@ -140,6 +140,7 @@ require("go-mod").setup({
     error = "DiagnosticError",
   },
   auto_check = true,
+  notify_on_load = true, -- notify once when a loaded buffer first starts fetching
   check_interval = 60, -- minutes; 0 disables timer and re-entry refreshes
   log_level = "info", -- trace, debug, info, warn, error
   log_file = vim.fn.stdpath("cache") .. "/go-mod.log", -- "" disables file logging
@@ -155,6 +156,13 @@ An interval of `0` keeps the initial automatic check but disables periodic and
 re-entry refreshes. `unpublished` means the current version compares newer than
 the returned latest version; it does not establish that a version was never
 published.
+
+`notify_on_load` shows an INFO notification titled `go-mod.nvim` when each loaded
+buffer starts its first dependency version lookup. It applies to automatic and
+manual checks, independently of `log_level`. Saves and later checks do not repeat
+it; unloading and reloading the buffer resets it. Empty files, files with only
+invalid versions, and checks cancelled before a lookup starts do not notify.
+Set it to `false` to disable it.
 
 ## Go behavior and limits
 
@@ -190,7 +198,7 @@ See `:help go-mod` for commands and Lua APIs. Development and local checks are
 covered in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 Tagged versions are available on the [releases page](https://github.com/syz51/go-mod.nvim/releases).
-To pin a release with lazy.nvim, add `tag = "v0.1.0"` to the installation spec.
+To pin a release with lazy.nvim, add `tag = "v0.1.2"` to the installation spec.
 
 ## License
 

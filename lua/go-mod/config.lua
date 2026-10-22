@@ -10,6 +10,7 @@ local defaults = {
 		error = "DiagnosticError",
 	},
 	auto_check = true,
+	notify_on_load = true,
 	check_interval = 60,
 	max_concurrent_jobs = 4,
 	timeout = 30000,
@@ -45,6 +46,7 @@ function M.setup(opts)
 	end
 	local options = vim.tbl_deep_extend("force", vim.deepcopy(defaults), opts)
 	expect(type(options.auto_check) == "boolean", "auto_check", "a boolean")
+	expect(type(options.notify_on_load) == "boolean", "notify_on_load", "a boolean")
 	expect(number(options.check_interval, 0), "check_interval", "a finite number >= 0 (minutes)")
 	expect(number(options.max_concurrent_jobs, 1, true), "max_concurrent_jobs", "an integer >= 1")
 	expect(number(options.timeout, 1, true), "timeout", "an integer >= 1 (milliseconds)")

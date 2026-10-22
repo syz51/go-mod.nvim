@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.1.2 - 2026-10-23
+
+- Notify once when a loaded `go.mod` buffer starts fetching dependency versions;
+  set `notify_on_load = false` to disable this notification independently of logging.
+
 ## 0.1.1 - 2026-10-23
 
 - Publish GitHub releases automatically after tag CI passes, using release

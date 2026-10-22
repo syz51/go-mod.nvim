@@ -60,7 +60,7 @@ LazyVim: create ~/.config/nvim/lua/plugins/go-mod.lua with a returned spec list:
 Restart Neovim, run :Lazy install go-mod.nvim, and open go.mod. The filetype
 loads the plugin; opts calls setup automatically. No custom config function,
 Go extra, or Plenary dependency is needed. version = "*" follows stable tags;
-:Lazy update go-mod.nvim updates it. Use tag = "v0.1.0" instead of version for
+:Lazy update go-mod.nvim updates it. Use tag = "v0.1.2" instead of version for
 an exact pin.
 
 ==============================================================================
@@ -85,6 +85,7 @@ Defaults: >lua
         error = "DiagnosticError",
       },
       auto_check = true,
+      notify_on_load = true,
       check_interval = 60,
       log_level = "info",
       log_file = vim.fn.stdpath("cache") .. "/go-mod.log",
@@ -101,6 +102,13 @@ value refreshes loaded go.mod buffers periodically, without requiring a buffer
 switch. Set it to 0 to disable timer and re-entry refreshes while retaining the
 initial automatic check. For manual checks only, set auto_check to false and
 check_interval to 0.
+
+notify_on_load shows an INFO notification titled go-mod.nvim when a loaded
+buffer starts its first dependency version lookup. It applies to automatic and
+manual checks, independently of log_level. Saves and later checks do not repeat
+it; unloading and reloading the buffer resets it. Empty files, files with only
+invalid versions, and checks cancelled before a lookup starts do not notify.
+Set it to false to disable it.
 
 max_concurrent_jobs limits concurrent version lookups. timeout is the per-Go-
 process timeout in MILLISECONDS.

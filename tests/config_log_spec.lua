@@ -4,9 +4,13 @@ local options = config.setup({ timeout = 100, icons = { outdated = "!" } })
 assert(options.timeout == 100 and options.icons.outdated == "!")
 options = config.setup({})
 assert(options.timeout == 30000, "setup must start from defaults")
+assert(options.notify_on_load == true, "first-fetch notifications must default to enabled")
+assert(config.setup({ notify_on_load = false }).notify_on_load == false)
 for _, bad in ipairs({
 	false,
 	{ auto_check = "yes" },
+	{ notify_on_load = "yes" },
+	{ notify_on_load = 1 },
 	{ check_interval = -1 },
 	{ timeout = 0 },
 	{ timeout = 1.5 },

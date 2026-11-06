@@ -11,6 +11,9 @@
   are no longer maintained.
 - Keep older maintenance releases from replacing a newer stable release as
   Latest, including when releases are published concurrently.
+- Run CI once per pull-request update by limiting push runs to `main`, and
+  install stable Neovim on macOS from its checksum-verified release tarball
+  instead of Homebrew.
 
 ## 0.1.2 - 2026-10-23
 

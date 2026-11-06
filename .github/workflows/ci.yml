@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: ['**']
+    branches: [main]
   pull_request:
   workflow_call:
 
@@ -31,10 +31,39 @@ jobs:
         with:
           go-version: stable
           cache: false
-      - uses: rhysd/action-setup-vim@febef33995d6649302e9d88dda81e071b68f16a7 # v1
+      - if: runner.os != 'macOS'
+        uses: rhysd/action-setup-vim@febef33995d6649302e9d88dda81e071b68f16a7 # v1
         with:
           neovim: true
           version: ${{ matrix.neovim }}
+      # action-setup-vim installs stable Neovim on macOS with `brew update` and
+      # `brew install` (~40 s); use the same release tarball as on Linux instead.
+      - name: Install Neovim release on macOS
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NEOVIM_TAG: ${{ matrix.neovim }}
+        run: |
+          set -euo pipefail
+          case "$RUNNER_ARCH" in
+            ARM64) asset=nvim-macos-arm64 ;;
+            X64) asset=nvim-macos-x86_64 ;;
+            *) echo "Unsupported runner architecture: $RUNNER_ARCH" >&2; exit 1 ;;
+          esac
+          # Read the asset ID and GitHub's SHA-256 digest from one response, so a
+          # moving tag such as stable cannot pair one build with another's digest.
+          release=$(gh api "repos/neovim/neovim/releases/tags/$NEOVIM_TAG")
+          read -r id digest < <(jq -er --arg name "$asset.tar.gz" \
+            '[.assets[] | select(.name == $name)] | if length == 1 then "\(.[0].id) \(.[0].digest)" else error("missing asset") end' \
+            <<< "$release")
+          [[ $digest =~ ^sha256:[[:xdigit:]]{64}$ ]]
+          archive="$RUNNER_TEMP/$asset.tar.gz"
+          gh api -H 'Accept: application/octet-stream' "repos/neovim/neovim/releases/assets/$id" > "$archive"
+          printf '%s  %s\n' "${digest#sha256:}" "$archive" | shasum -a 256 --check
+          tar -xzf "$archive" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/$asset/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/$asset/bin/nvim" --version
       - name: Run standalone specs offline
         env:
           GOPROXY: 'off'

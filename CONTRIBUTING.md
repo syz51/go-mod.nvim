@@ -63,7 +63,7 @@ anything you could not run.
 ## Releases
 
 Releases are published automatically when a maintainer pushes an annotated
-SemVer tag. Branch pushes and pull requests run CI. A `v*` tag starts the
+SemVer tag. Pushes to `main` and pull requests run CI. A `v*` tag starts the
 `Release` workflow, which reuses the same tests, formatting, and lazy.nvim
 installation checks for that exact tagged commit before publishing.
 

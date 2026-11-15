@@ -288,6 +288,12 @@ function M.get_buffer_info(bufnr)
 	return state.info
 end
 
+-- True while a check runs for the buffer text as it is now.
+function M.is_checking(bufnr)
+	local state = buffers[resolve(bufnr)]
+	return state ~= nil and state.request ~= nil and current(state.request)
+end
+
 function M.check_periodic(bufnr)
 	bufnr = resolve(bufnr)
 	local interval = config.options.check_interval or 60

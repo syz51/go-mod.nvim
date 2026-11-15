@@ -33,7 +33,9 @@ local function queue_check(bufnr)
 			return
 		end
 		scheduled[bufnr] = nil
-		if initialized and eligible(bufnr) then
+		-- An event in the same tick may already have started this check; restarting
+		-- it would kill running lookups and start them again.
+		if initialized and eligible(bufnr) and not core.is_checking(bufnr) then
 			core.check_dependencies(bufnr)
 		end
 	end)

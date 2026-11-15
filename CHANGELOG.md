@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Start each version lookup once when a `go.mod` buffer first opens or the
+  first command loads the plugin. Start-up events no longer cancel and restart
+  the lookups that another event started in the same tick.
 - Require passing pull-request checks on `main` and protect published release
   tags against changes or deletion.
 - Add private vulnerability reporting guidance and weekly GitHub Actions

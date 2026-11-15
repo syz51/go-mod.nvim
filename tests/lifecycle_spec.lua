@@ -9,6 +9,9 @@ local spy = {
 	check_periodic = function(buf)
 		periodic[#periodic + 1] = buf
 	end,
+	is_checking = function()
+		return false
+	end,
 	cleanup_buffer = function(buf)
 		cleaned[#cleaned + 1] = buf
 	end,

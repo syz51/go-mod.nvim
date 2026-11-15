@@ -45,11 +45,27 @@ local buf = api.nvim_get_current_buf()
 settle()
 assert(#jobs == 6 and kills == 0, string.format("first open: %d lookups, %d kills", #jobs, kills))
 
--- A write changes the buffer generation, so the queued check still runs.
+-- A write after the check starts a new check.
 jobs = {}
 vim.cmd("silent write")
 settle()
 assert(#jobs == 6 and kills == 0, string.format("write: %d lookups, %d kills", #jobs, kills))
+
+-- A write during a check restarts it, also when the text is the same: the
+-- file on disk may have changed.
+jobs = {}
+require("go-mod.core").check_dependencies(buf)
+vim.cmd("silent write")
+settle()
+assert(#jobs == 10 and kills == 4, string.format("write in check: %d lookups, %d kills", #jobs, kills))
+
+-- The first command after a teardown runs setup and then one check.
+jobs, kills = {}, 0
+require("go-mod").teardown()
+vim.cmd("GoModCheck")
+settle()
+assert(#jobs == 6 and kills == 0, string.format("first command: %d lookups, %d kills", #jobs, kills))
+kills = 0
 
 -- An explicit check still replaces a running one.
 jobs = {}

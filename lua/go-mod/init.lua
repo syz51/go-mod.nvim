@@ -22,20 +22,24 @@ local function eligible(bufnr)
 		and (vim.bo[bufnr].filetype == "gomod" or vim.bo[bufnr].filetype == "go.mod")
 end
 
-local function queue_check(bufnr)
-	if scheduled[bufnr] then
+-- `restart` marks an event, such as a write, that makes a running check out of
+-- date even when the buffer text is the same.
+local function queue_check(bufnr, restart)
+	local pending = scheduled[bufnr]
+	if pending then
+		pending.restart = pending.restart or restart
 		return
 	end
-	local ticket = {}
+	local ticket = { restart = restart }
 	scheduled[bufnr] = ticket
 	vim.schedule(function()
 		if scheduled[bufnr] ~= ticket then
 			return
 		end
 		scheduled[bufnr] = nil
-		-- An event in the same tick may already have started this check; restarting
-		-- it would kill running lookups and start them again.
-		if initialized and eligible(bufnr) and not core.is_checking(bufnr) then
+		-- BufEnter or a command may already have started this check. Restarting it
+		-- would kill running lookups and start them again.
+		if initialized and eligible(bufnr) and (ticket.restart or not core.is_checking(bufnr)) then
 			core.check_dependencies(bufnr)
 		end
 	end)
@@ -74,7 +78,7 @@ function M.setup(opts)
 			pattern = "go.mod",
 			group = group,
 			callback = function(args)
-				queue_check(args.buf)
+				queue_check(args.buf, args.event == "BufWritePost")
 			end,
 		})
 		api.nvim_create_autocmd("FileType", {

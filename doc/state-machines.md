@@ -21,7 +21,7 @@ the maintainer's work board; the identifier is in the `Outcome` column.
 
 ### 1. Plugin bootstrap
 
-Files: `plugin/go-mod.lua:1-65`, `lua/go-mod/init.lua:68`.
+Files: `plugin/go-mod.lua:1-65`, `lua/go-mod/init.lua:72`.
 
 | State | Meaning |
 | --- | --- |
@@ -35,15 +35,15 @@ runs `setup` only when `is_setup()` is false. A failed setup reports an error
 and leaves the stubs in place.
 
 The stub commands and the commands of `setup` have the same names
-(`plugin/go-mod.lua:36-65`, `lua/go-mod/init.lua:126-149`). `setup` replaces
+(`plugin/go-mod.lua:36-65`, `lua/go-mod/init.lua:130-153`). `setup` replaces
 the stubs. Both versions call the same functions, so the two writers agree.
 
-Gap: `vim.g.gomod_nvim_loaded` (`lua/go-mod/init.lua:68`) is a second flag
+Gap: `vim.g.gomod_nvim_loaded` (`lua/go-mod/init.lua:72`) is a second flag
 that nothing reads. See G9.
 
 ### 2. Setup and teardown
 
-File: `lua/go-mod/init.lua:5-7`, `44-166`.
+File: `lua/go-mod/init.lua:5-7`, `48-170`.
 
 | State | `initialized` | Parts |
 | --- | --- | --- |
@@ -54,23 +54,24 @@ Transitions:
 
 - `setup(opts)` validates the options first (`init.lua:62`). A validation
   error leaves the old state unchanged (probe: refuted gap R1).
-- A valid `setup` calls `teardown`, then builds all parts (`init.lua:63-160`).
+- A valid `setup` calls `teardown`, then builds all parts (`init.lua:67-164`).
 - `teardown` clears the flag, the timer, the scheduled tickets, the core state
-  and the autocommand group (`init.lua:48-56`). `VimLeavePre` calls it.
+  and the autocommand group (`init.lua:52-60`). `VimLeavePre` calls it.
 - A public function called in state down calls `setup()` with default options
-  (`init.lua:162-166`).
+  (`init.lua:166-170`).
 
 Gaps: G9 (teardown is not a complete inverse), G10 (a second `setup` drops
 per-buffer session state).
 
 ### 3. Scheduled check tickets
 
-File: `lua/go-mod/init.lua:7`, `25-42`, `116-122`.
+File: `lua/go-mod/init.lua:7`, `25-46`, `121-127`.
 
 Per buffer: no ticket, or one ticket. `queue_check` stores a ticket and
 schedules a callback. The callback runs the check only when its ticket is
-still the stored one, the plugin is up, the buffer is eligible, and no current
-check runs (`init.lua:31-41`). Buffer removal and `teardown` drop tickets.
+still the stored one, the plugin is up and the buffer is eligible. A ticket
+from a read or filetype event does not run while a current check runs; a
+ticket from `BufWritePost` always runs (`init.lua:35-45`). Buffer removal and `teardown` drop tickets.
 
 This machine merges the events of one tick (`BufReadPost`, `BufNewFile`,
 `BufWritePost`, `FileType`, the initial scan of `setup`). Before this audit it
@@ -79,7 +80,7 @@ See G1.
 
 ### 4. Periodic timer
 
-File: `lua/go-mod/init.lua:6`, `9-17`, `88-114`.
+File: `lua/go-mod/init.lua:6`, `9-17`, `93-119`.
 
 States: no timer (`check_interval = 0`), or a repeating uv timer. Each tick
 calls `core.check_periodic` for every eligible buffer. `BufEnter` calls it
@@ -312,15 +313,16 @@ Neovim 0.12.6. `n` is the number of required modules.
 | Updater `capture` and `start_batch` (two reads of `go.mod`) | synchronous part, n=300 | 363 µs. Examined, no work. |
 | **First open, default options (G1)** | lookups started; kills | **before: 14 and 4 (n=10), 304 and 4 (n=300); after: 10 and 0, 300 and 0** |
 | **First `:GoModCheck` that loads the plugin (G1)** | lookups started; kills | **before: 14 and 4; after: 10 and 0** |
-| **First open with a local stub `go` that takes 200 ms (G1)** | time from `:edit` to rendered text | **before: 873, 890, 1021 ms (n=10), 2443 ms (n=40); after: 817, 819, 825 ms (n=10), 2311 ms (n=40)** |
+| First open with a local stub `go` that takes 200 ms (G1) | time from `:edit` to rendered text, n=10, 8 interleaved runs | before: 843 to 889 ms, median 880 ms; after: 840 to 890 ms, median 875 ms. No measurable change: the fix removes 4 process starts and 4 kills, not waiting time. |
 | Write of `go.mod` (G3) | lookups for `:w` with no change | 10 of 10, 300 of 300, before and after. Not changed here; see agent-board-566. |
 | Lookups | one `go list -m -json <module>@latest` process for each module, at most `max_concurrent_jobs` at a time | By design and configurable. Examined, no work. |
 | Update run | `go env GOFLAGS`, then one `go get` for all selected modules | Two sequential processes; the first protects the second. Examined, no work. |
 
-The fix for G1 is in `lua/go-mod/init.lua:36-40`: the scheduled check does
+The fix for G1 is in `lua/go-mod/init.lua:40-44`: the scheduled check does
 not run when `core.is_checking(bufnr)` is true (`lua/go-mod/core.lua:291-295`).
-A check for an older buffer text does not count, so a write still starts a
-new check.
+A check for an older buffer text does not count. A ticket from `BufWritePost`
+ignores the guard, because the file on disk can differ while the buffer text
+is the same. A write therefore starts a new check in every case, as before.
 
 ## States with no test
 
